@@ -1,23 +1,23 @@
 
 import React, { useMemo, useState } from "react";
-import { listTickets, setTicketCheckedIn } from "../../services/ticketService";
+import { listTickets, setTicketCheckedIn, deleteTicket } from "../../services/ticketService";
 import { listEvents } from "../../services/eventService";
 import "../../assets/styles/pages/adminTickets.css";
 
-function toCSV(rows){
-  const headers = ["publicTicketId","agNo","name","email","eventId","eventTitle","department","semester","createdAt","checkedIn"];
+function toCSV(rows) {
+  const headers = ["publicTicketId", "agNo", "name", "email", "eventId", "eventTitle", "department", "semester", "createdAt", "checkedIn"];
   const esc = (v) => {
     const s = String(v ?? "");
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"', '""')}"`;
     return s;
   };
   const lines = [headers.join(",")];
-  for(const r of rows){
-    lines.push(headers.map(h=>esc(r[h])).join(","));
+  for (const r of rows) {
+    lines.push(headers.map(h => esc(r[h])).join(","));
   }
   return lines.join("\n");
 }
-function downloadText(filename, text){
+function downloadText(filename, text) {
   const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -29,7 +29,7 @@ function downloadText(filename, text){
   URL.revokeObjectURL(url);
 }
 
-export default function AdminTickets(){
+export default function AdminTickets() {
   const [q, setQ] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [page, setPage] = useState(1);
@@ -43,7 +43,7 @@ export default function AdminTickets(){
   const events = useMemo(() => listEvents(), []);
   const eventMap = useMemo(() => {
     const m = {};
-    for(const e of events){
+    for (const e of events) {
       m[e.id] = e;
     }
     return m;
@@ -53,7 +53,7 @@ export default function AdminTickets(){
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if(!s) return tickets;
+    if (!s) return tickets;
     return tickets.filter(t =>
       (t.agNo || "").toLowerCase().includes(s) ||
       (t.publicTicketId || "").toLowerCase().includes(s) ||
@@ -81,12 +81,27 @@ export default function AdminTickets(){
 
   const handleExport = () => {
     const csv = toCSV(enriched);
-    downloadText(`tcs-tickets-${new Date().toISOString().slice(0,10)}.csv`, csv);
+    downloadText(`tcs-tickets-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   };
 
   const markCheckedIn = (ticketId, val) => {
     setTicketCheckedIn(ticketId, val);
     setRefresh(x => x + 1);
+  };
+
+  // Handle ticket deletion (Admin only)
+  const handleDelete = (ticketId, ticketInfo) => {
+    const confirmMsg = `Are you sure you want to delete this ticket?\n\nAG No: ${ticketInfo.agNo}\nName: ${ticketInfo.name}\nEvent: ${ticketInfo.eventTitle}\n\nThis will allow the student to re-register.`;
+
+    if (window.confirm(confirmMsg)) {
+      const success = deleteTicket(ticketId);
+      if (success) {
+        setCheckMsg("✅ Ticket deleted successfully. Student can now re-register.");
+        setRefresh(x => x + 1);
+      } else {
+        setCheckMsg("❌ Failed to delete ticket.");
+      }
+    }
   };
 
   // QR Scan (best-effort): uses BarcodeDetector if available
@@ -95,11 +110,11 @@ export default function AdminTickets(){
 
   const startScan = async () => {
     setScanError("");
-    if(!("BarcodeDetector" in window)){
+    if (!("BarcodeDetector" in window)) {
       setScanError("QR scanner not supported in this browser. Use Chrome / Edge on mobile.");
       return;
     }
-    try{
+    try {
       setScanning(true);
       const video = document.getElementById("qrVideo");
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -108,10 +123,10 @@ export default function AdminTickets(){
 
       const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
       const loop = async () => {
-        if(!scanning) return;
-        try{
+        if (!scanning) return;
+        try {
           const codes = await detector.detect(video);
-          if(codes?.length){
+          if (codes?.length) {
             const value = (codes[0].rawValue || "").trim();
             // If QR contains AG No, put into check-in box
             setCheckAg(value);
@@ -119,11 +134,11 @@ export default function AdminTickets(){
             stopScan();
             return;
           }
-        }catch(e){}
+        } catch (e) { }
         requestAnimationFrame(loop);
       };
       requestAnimationFrame(loop);
-    }catch(e){
+    } catch (e) {
       setScanError("Camera access denied or unavailable.");
       setScanning(false);
     }
@@ -133,7 +148,7 @@ export default function AdminTickets(){
     setScanning(false);
     const video = document.getElementById("qrVideo");
     const stream = video?.srcObject;
-    if(stream){
+    if (stream) {
       stream.getTracks().forEach(t => t.stop());
       video.srcObject = null;
     }
@@ -143,16 +158,16 @@ export default function AdminTickets(){
     setCheckMsg("");
     const ag = checkAg.trim().toUpperCase();
     const ev = checkEvent.trim();
-    if(!ag || !ev){
+    if (!ag || !ev) {
       setCheckMsg("AG No + Event required.");
       return;
     }
     const found = tickets.find(t => (t.agNo || "").toUpperCase() === ag && t.eventId === ev);
-    if(!found){
+    if (!found) {
       setCheckMsg("Ticket not found for this AG No + Event.");
       return;
     }
-    if(found.checkedIn){
+    if (found.checkedIn) {
       setCheckMsg("Already checked-in.");
       return;
     }
@@ -178,18 +193,18 @@ export default function AdminTickets(){
             className="input"
             placeholder="Search by AG No / Ticket ID / Email"
             value={q}
-            onChange={(e)=>{ setQ(e.target.value); setPage(1); }}
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
           />
-          <button className="btn btnGhost" onClick={()=>{ setQ(""); setPage(1); }}>Clear</button>
+          <button className="btn btnGhost" onClick={() => { setQ(""); setPage(1); }}>Clear</button>
           <button className="btn btnPrimary" onClick={handleExport}>Export CSV</button>
         </div>
 
         <div className="adminScan">
-          <div className="sectionSubtitle" style={{marginBottom:".4rem"}}>Check-in by AG No (direct) + QR</div>
+          <div className="sectionSubtitle" style={{ marginBottom: ".4rem" }}>Check-in by AG No (direct) + QR</div>
 
           <div className="checkRow">
-            <input className="input" placeholder="AG No (scan or type)" value={checkAg} onChange={(e)=>setCheckAg(e.target.value)} />
-            <select className="input" value={checkEvent} onChange={(e)=>setCheckEvent(e.target.value)}>
+            <input className="input" placeholder="AG No (scan or type)" value={checkAg} onChange={(e) => setCheckAg(e.target.value)} />
+            <select className="input" value={checkEvent} onChange={(e) => setCheckEvent(e.target.value)}>
               <option value="">Select Event</option>
               {events.map(e => <option key={e.id} value={e.id}>{e.id} • {e.title}</option>)}
             </select>
@@ -212,7 +227,7 @@ export default function AdminTickets(){
       <div className="adminFooter">
         <div className="sectionSubtitle">
           Page size:
-          <select className="input small" value={pageSize} onChange={(e)=>{ setPageSize(Number(e.target.value)); setPage(1); }}>
+          <select className="input small" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
@@ -220,15 +235,15 @@ export default function AdminTickets(){
           </select>
         </div>
         <div className="pager">
-          <button className="btn btnGhost" onClick={()=>setPage(1)} disabled={safePage===1}>First</button>
-          <button className="btn btnGhost" onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={safePage===1}>Prev</button>
+          <button className="btn btnGhost" onClick={() => setPage(1)} disabled={safePage === 1}>First</button>
+          <button className="btn btnGhost" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}>Prev</button>
           <div className="pill">{safePage} / {totalPages}</div>
-          <button className="btn btnGhost" onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={safePage===totalPages}>Next</button>
-          <button className="btn btnGhost" onClick={()=>setPage(totalPages)} disabled={safePage===totalPages}>Last</button>
+          <button className="btn btnGhost" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>Next</button>
+          <button className="btn btnGhost" onClick={() => setPage(totalPages)} disabled={safePage === totalPages}>Last</button>
         </div>
       </div>
 
-      <div className="card" style={{padding:0, overflow:"hidden"}}>
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div className="adminTableWrap">
           <table className="adminTable">
             <thead>
@@ -239,6 +254,7 @@ export default function AdminTickets(){
                 <th>Department</th>
                 <th>Sem</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -252,16 +268,25 @@ export default function AdminTickets(){
                   <td>
                     <button
                       className={`statusBtn ${t.checkedIn ? "ok" : ""}`}
-                      onClick={()=>markCheckedIn(t.id, !t.checkedIn)}
+                      onClick={() => markCheckedIn(t.id, !t.checkedIn)}
                       title="Toggle check-in"
                     >
                       {t.checkedIn ? "Checked-in" : "Not checked"}
                     </button>
                   </td>
+                  <td>
+                    <button
+                      className="deleteBtn"
+                      onClick={() => handleDelete(t.id, t)}
+                      title="Delete ticket (allows re-registration)"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!pageRows.length && (
-                <tr><td colSpan="6" style={{padding:"1rem"}} className="sectionSubtitle">No tickets found.</td></tr>
+                <tr><td colSpan="7" style={{ padding: "1rem" }} className="sectionSubtitle">No tickets found.</td></tr>
               )}
             </tbody>
           </table>

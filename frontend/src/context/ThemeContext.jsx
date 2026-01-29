@@ -122,14 +122,11 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(DEFAULT_THEME);
 
   useEffect(() => {
+    // Normal flow: check saved theme
     const saved = getLS(LS_KEYS.THEME, null);
     // Merge saved with default so new keys are always present
     const merged = saved ? { ...DEFAULT_THEME, ...saved } : DEFAULT_THEME;
     setTheme(merged);
-    // Save merged theme to ensure new keys are persisted
-    if (saved) {
-      setLS(LS_KEYS.THEME, merged);
-    }
     // Force apply all theme values
     applyThemeToDOM(merged);
   }, []);

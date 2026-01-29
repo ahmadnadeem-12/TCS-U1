@@ -71,7 +71,7 @@ export function ensureSeedData() {
         name: "Muhammad Adan",
         role: "President",
         degree: "BS Computer Science",
-        agNo: "2022-AG-7993",
+        agNo: "2022-AG-9800",
         interests: ["Leadership", "Community", "Events"],
         phone: "+92 300 0000000",
         email: "adan@example.com",

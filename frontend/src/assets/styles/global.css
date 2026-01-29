@@ -69,6 +69,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Minimum width ensures desktop layout shows when "Request Desktop Site" is used on mobile */
+  min-width: 1024px;
+}
+
 html,
 body {
   height: 100%;
@@ -157,9 +162,9 @@ textarea {
   top: 0;
   height: 100vh;
   padding: 2rem 1.5rem;
-  background: var(--sidebar-bg, linear-gradient(180deg, rgba(15, 8, 25, 0.98) 0%, rgba(10, 5, 18, 0.99) 100%));
+  background: var(--sidebar-bg);
   backdrop-filter: blur(30px);
-  border-right: 1px solid var(--sidebar-border, var(--glass-border));
+  border-right: 1px solid var(--sidebar-border);
   box-shadow:
     4px 0 40px rgba(0, 0, 0, 0.5),
     0 0 60px rgba(194, 52, 165, 0.05);
@@ -210,14 +215,25 @@ textarea {
 .mobileMenu {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
   z-index: 9998;
   background: #0a0510;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 4rem 1.5rem 2rem;
   overflow-y: auto;
+  overflow-x: hidden;
+  box-shadow: 4px 0 40px rgba(0, 0, 0, 0.8);
+  border-right: 1px solid rgba(194, 52, 165, 0.3);
+}
+
+/* Prevent body scroll when mobile menu is open */
+body.mobileMenuOpen {
+  overflow: hidden;
 }
 
 .mobileMenuClose {
@@ -235,16 +251,19 @@ textarea {
 }
 
 .mobileMenuLogo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  width: 100%;
 }
 
 .mobileMenuNav {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   width: 100%;
-  max-width: 280px;
 }
 
 .mobileNavLink {
@@ -569,7 +588,7 @@ textarea {
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border-radius: var(--radius-full);
-  color: var(--sidebar-text, var(--text-muted));
+  color: var(--sidebar-text);
   font-size: 0.88rem;
   font-weight: 500;
   letter-spacing: 0.02em;

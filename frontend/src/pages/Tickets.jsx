@@ -1,10 +1,12 @@
 
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useMemo, useState, useRef, useEffect } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { EventContext } from "../context/EventContext";
 import { createTicket, listTickets } from "../services/ticketService";
+import { downloadTicketPDF } from "../services/pdfService";
+import { sendTicketEmail } from "../services/emailService";
 import { formatDate } from "../utils/helpers";
 import "../assets/styles/pages/tickets.css";
 
@@ -23,6 +25,7 @@ export default function Tickets() {
   const { user, isAuthed } = useAuth();
   const nav = useNavigate();
   const eventsCtx = useContext(EventContext);
+  const qrRef = useRef(null);
 
   const events = useMemo(
     () => eventsCtx.list().filter((e) => e.status !== "past"),
@@ -38,32 +41,24 @@ export default function Tickets() {
     semester: "1",
   });
 
-  // Auto-format AG Number: 2022 + 4/5 digits -> 2022-AG-XXXX
-  const handleAgNoChange = (value) => {
-    // Remove all non-digits first
-    let digits = value.replace(/[^0-9]/g, "");
-
-    // If user has typed enough digits, format automatically
-    if (digits.length >= 8) {
-      // First 4 digits = year, last 4-5 digits = number
-      const year = digits.slice(0, 4);
-      const number = digits.slice(4, 9); // Max 5 digits after year
-      const formatted = `${year}-AG-${number}`;
-      setForm({ ...form, agNo: formatted });
-    } else if (digits.length > 4) {
-      // Partial format while typing
-      const year = digits.slice(0, 4);
-      const number = digits.slice(4);
-      const formatted = `${year}-AG-${number}`;
-      setForm({ ...form, agNo: formatted });
-    } else {
-      // Just digits, no formatting yet
-      setForm({ ...form, agNo: digits });
-    }
-  };
 
   const [ticket, setTicket] = useState(null);
   const [err, setErr] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showSuccess) {
+      document.body.classList.add('modalOpen');
+    } else {
+      document.body.classList.remove('modalOpen');
+    }
+    return () => {
+      document.body.classList.remove('modalOpen');
+    };
+  }, [showSuccess]);
 
   const selectedEvent = events.find((e) => e.id === form.eventId);
 
@@ -71,6 +66,53 @@ export default function Tickets() {
     if (!user) return [];
     return listTickets().filter((t) => t.userId === user.id);
   }, [user, ticket]);
+
+  // Get QR code as data URL
+  const getQRCodeDataUrl = () => {
+    if (qrRef.current) {
+      const canvas = qrRef.current.querySelector('canvas');
+      if (canvas) {
+        return canvas.toDataURL('image/png');
+      }
+    }
+    return null;
+  };
+
+  // Handle PDF Download
+  const handleDownloadPDF = () => {
+    if (!ticket) return;
+
+    const qrDataUrl = getQRCodeDataUrl();
+    const ticketData = {
+      ...ticket,
+      eventTitle: selectedEvent?.title || 'TCS Event',
+      eventDate: selectedEvent ? formatDate(selectedEvent.date) : 'TBA',
+      eventTime: selectedEvent?.time || 'TBA',
+    };
+
+    downloadTicketPDF(ticketData, qrDataUrl);
+  };
+
+  // Handle Email Sending
+  const handleSendEmail = async () => {
+    if (!ticket) return false;
+
+    const qrDataUrl = getQRCodeDataUrl();
+    const ticketData = {
+      ...ticket,
+      eventTitle: selectedEvent?.title || 'TCS Event',
+      eventDate: selectedEvent ? formatDate(selectedEvent.date) : 'TBA',
+      eventTime: selectedEvent?.time || 'TBA',
+    };
+
+    try {
+      const success = await sendTicketEmail(ticketData, qrDataUrl);
+      return success;
+    } catch (error) {
+      console.error('Email error:', error);
+      return false;
+    }
+  };
 
   if (!isAuthed) {
     return (
@@ -87,8 +129,11 @@ export default function Tickets() {
     );
   }
 
-  const onGenerate = () => {
+  const onGenerate = async () => {
     setErr("");
+    setIsLoading(true);
+    setEmailSent(false);
+
     try {
       if (!form.fullName.trim()) throw new Error("Full Name is required.");
       if (!form.email.trim()) throw new Error("Email is required.");
@@ -124,8 +169,20 @@ export default function Tickets() {
       });
 
       setTicket(t);
+
+      // Show success popup
+      setShowSuccess(true);
+
+      // Try to send email (don't block on failure)
+      setTimeout(async () => {
+        const emailSuccess = await handleSendEmail();
+        setEmailSent(emailSuccess);
+      }, 500);
+
     } catch (e) {
       setErr(e?.message || "Failed to create ticket.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -144,6 +201,41 @@ export default function Tickets() {
 
   return (
     <section className="section">
+      {/* Success Popup Modal */}
+      {showSuccess && (
+        <div className="successModal">
+          <div className="successModalContent">
+            <div className="successIcon">✓</div>
+            <h2>Registered Successfully! 🎉</h2>
+            <p style={{ color: "var(--text-muted)", marginTop: "0.5rem" }}>
+              Your ticket has been generated for:
+            </p>
+            <p style={{ color: "var(--accent-cyan)", fontWeight: 700, marginTop: "0.25rem" }}>
+              {selectedEvent?.title || "Event"}
+            </p>
+
+            {/* Email Status */}
+            <div className="emailStatus">
+              {emailSent ? (
+                <span style={{ color: "#4ade80" }}>✓ Email sent successfully to {ticket?.email}</span>
+              ) : (
+                <span style={{ color: "var(--text-muted)" }}>📧 Sending email to {ticket?.email}...</span>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="successActions">
+              <button className="btn btnPrimary" onClick={() => { handleDownloadPDF(); setShowSuccess(false); }}>
+                📥 Download PDF Ticket
+              </button>
+              <button className="btn btnGhost" onClick={() => setShowSuccess(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="sectionHeader">
         <div>
           <div className="sectionTitle">Tickets & Registration</div>
@@ -158,7 +250,7 @@ export default function Tickets() {
         <div className="card">
           <div style={{ fontWeight: 900, marginBottom: ".2rem" }}>Register for Event</div>
           <div className="sectionSubtitle">
-            AG Number format: <b>YYYY-AG-XXXX</b> / <b>YYYY-AG-XXXXX</b>
+            Enter your AG Number (e.g., <b>2022-AG-9800</b>)
           </div>
 
           <div className="hr" />
@@ -178,9 +270,9 @@ export default function Tickets() {
               <input
                 className="input"
                 value={form.agNo}
-                onChange={(e) => handleAgNoChange(e.target.value)}
-                placeholder="20227993 → 2022-AG-7993"
-                maxLength={14}
+                onChange={(e) => setForm({ ...form, agNo: e.target.value })}
+                placeholder="e.g. 2022-AG-9800"
+                maxLength={15}
               />
             </div>
           </div>
@@ -245,8 +337,12 @@ export default function Tickets() {
           {err && <div style={{ marginTop: ".8rem", color: "#ffd2d7" }}>{err}</div>}
 
           <div style={{ marginTop: "1rem", display: "flex", gap: ".6rem", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-            <button className="btn btnPrimary" onClick={onGenerate}>
-              Get Ticket
+            <button
+              className="btn btnPrimary"
+              onClick={onGenerate}
+              disabled={isLoading}
+            >
+              {isLoading ? "⏳ Generating..." : "Get Ticket"}
             </button>
             <div className="sectionSubtitle">
               Logged in as: <b>{user.email}</b>
@@ -266,13 +362,15 @@ export default function Tickets() {
                     <div><span>Date</span>{selectedEvent ? formatDate(selectedEvent.date) : "—"} • {selectedEvent?.time || "—"}</div>
                     <div><span>Dept</span>{ticket.department}</div>
                     <div><span>Semester</span>{ticket.semester}</div>
+                    <div><span>AG No</span>{ticket.agNo}</div>
+                    <div><span>Email</span>{ticket.email}</div>
                   </div>
-                  <div className="ticketMockIssuer">Issued to: <b>{ticket.fullName}</b></div>
+                  <div className="ticketMockIssuer">Issued to: <b>{ticket.name}</b></div>
                 </div>
 
-                <div className="ticketMockRight">
+                <div className="ticketMockRight" ref={qrRef}>
                   <div className="ticketMockQr">
-                    <QRCodeCanvas value={ticket.id} size={176} includeMargin={true} />
+                    <QRCodeCanvas value={qrPayload || ticket.id} size={176} includeMargin={true} />
                   </div>
                   <div className="ticketMockSmall">Scan at entry</div>
                 </div>
@@ -280,6 +378,16 @@ export default function Tickets() {
                 <div className="ticketMockStrip">
                   Ticket ID: <span>{ticket.publicTicketId || ticket.id}</span>
                 </div>
+              </div>
+
+              {/* PDF Download Button */}
+              <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button className="btn btnPrimary" onClick={handleDownloadPDF}>
+                  📥 Download PDF
+                </button>
+                <button className="btn btnGhost" onClick={handleSendEmail}>
+                  📧 Resend Email
+                </button>
               </div>
             </>
           ) : (

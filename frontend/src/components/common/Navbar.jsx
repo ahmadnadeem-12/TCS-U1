@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -32,6 +31,18 @@ const itemVariants = {
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.classList.add('mobileMenuOpen');
+    } else {
+      document.body.classList.remove('mobileMenuOpen');
+    }
+    return () => {
+      document.body.classList.remove('mobileMenuOpen');
+    };
+  }, [mobileMenuOpen]);
+
   const handleNavClick = () => {
     setMobileMenuOpen(false);
   };
@@ -56,13 +67,6 @@ export default function Navbar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Close button top right */}
-            <button
-              className="mobileMenuClose"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              ✕
-            </button>
 
             {/* Logo */}
             <div className="mobileMenuLogo">

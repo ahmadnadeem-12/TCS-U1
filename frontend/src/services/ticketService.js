@@ -48,9 +48,49 @@ export function setCheckedIn(ticketId, checkedIn) {
 }
 
 
-export function setTicketCheckedIn(ticketId, checkedIn){
+export function setTicketCheckedIn(ticketId, checkedIn) {
   const tickets = listTickets();
   const next = tickets.map(t => t.id === ticketId ? { ...t, checkedIn: !!checkedIn } : t);
   setLS(LS_KEYS.TICKETS, next);
   return next.find(t => t.id === ticketId);
+}
+
+/**
+ * Delete a ticket by ID (Admin only)
+ * This allows users to re-register if they made a mistake
+ * @param {string} ticketId - The ticket ID to delete
+ * @returns {boolean} - True if deleted, false if not found
+ */
+export function deleteTicket(ticketId) {
+  const tickets = listTickets();
+  const filtered = tickets.filter(t => t.id !== ticketId);
+
+  if (filtered.length === tickets.length) {
+    // Ticket not found
+    return false;
+  }
+
+  setLS(LS_KEYS.TICKETS, filtered);
+  return true;
+}
+
+/**
+ * Delete ticket by AG No and Event ID (Admin only)
+ * @param {string} agNo - AG Number
+ * @param {string} eventId - Event ID
+ * @returns {boolean} - True if deleted
+ */
+export function deleteTicketByAgNo(agNo, eventId) {
+  const tickets = listTickets();
+  const ag = (agNo || '').trim().toUpperCase();
+  const filtered = tickets.filter(t =>
+    !((t.agNo || '').toUpperCase() === ag && t.eventId === eventId)
+  );
+
+  if (filtered.length === tickets.length) {
+    return false;
+  }
+
+  setLS(LS_KEYS.TICKETS, filtered);
+  return true;
 }

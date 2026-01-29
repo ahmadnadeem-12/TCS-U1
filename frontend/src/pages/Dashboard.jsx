@@ -50,7 +50,8 @@ export default function Dashboard() {
   const themeCtx = useContext(ThemeContext);
 
   const [tab, setTab] = useState("home");
-  const [draftTheme, setDraftTheme] = useState(themeCtx.theme);
+  // Initialize with defaultTheme first, then sync with actual theme
+  const [draftTheme, setDraftTheme] = useState(themeCtx?.defaultTheme || themeCtx?.theme || {});
   const [hasUnsaved, setHasUnsaved] = useState(false);
 
   // Modal states
@@ -74,7 +75,15 @@ export default function Dashboard() {
   }, []);
 
   // Sync draftTheme with themeCtx.theme when not editing
-  useEffect(() => { if (!hasUnsaved) setDraftTheme(themeCtx.theme); }, [themeCtx.theme, hasUnsaved]);
+  useEffect(() => {
+    if (!hasUnsaved) {
+      // Use defaultTheme as fallback to ensure all keys are present
+      const themeToUse = Object.keys(themeCtx?.theme || {}).length > 0
+        ? themeCtx.theme
+        : (themeCtx?.defaultTheme || {});
+      setDraftTheme(themeToUse);
+    }
+  }, [themeCtx.theme, themeCtx.defaultTheme, hasUnsaved]);
 
   // Data
   const events = useMemo(() => eventsCtx.list(), [eventsCtx, refreshKey]);
